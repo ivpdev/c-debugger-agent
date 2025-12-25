@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using DebugAgentPrototype.Models;
@@ -7,85 +10,140 @@ namespace DebugAgentPrototype.Services;
 
 public class AgentService
 {
-    private readonly DebuggerService _debuggerService;
+    private readonly LldbService _debuggerService;
+    private readonly OpenRouterService _openRouterService;
 
-    public AgentService(DebuggerService debuggerService)
+    public AgentService(LldbService debuggerService, OpenRouterService llmService)
     {
         _debuggerService = debuggerService;
+        _openRouterService = llmService;
     }
 
-    public async Task<AgentResult> HandleAsync(string userText, AppState state, CancellationToken ct)
+    public async Task<AgentResult> ProcessUserMessageAsync(string userText, AppState state, CancellationToken ct)
     {
-        // Simulate async processing
-        await Task.Delay(50, ct);
-
-        var trimmed = userText.Trim();
+        var userMessage = userText.Trim();
 
         // Command: echo {whatever}
-        if (trimmed.StartsWith("echo ", StringComparison.OrdinalIgnoreCase))
+        if (userMessage.StartsWith("echo ", StringComparison.OrdinalIgnoreCase))
         {
-            var content = trimmed.Substring(5); // Everything after "echo "
-            return new AgentResult
-            {
-                AssistantReplyText = $"answer {content}"
-            };
+            return HandleEchoCommand(userMessage);
         }
 
         // Command: breakpoint {line}
-        if (trimmed.StartsWith("breakpoint ", StringComparison.OrdinalIgnoreCase))
+        if (userMessage.StartsWith("breakpoint ", StringComparison.OrdinalIgnoreCase))
         {
-            var lineStr = trimmed.Substring(11).Trim(); // Everything after "breakpoint "
-            if (int.TryParse(lineStr, out int line) && line > 0)
-            {
-                var breakpoint = new Breakpoint(line);
-                state.Breakpoints.Add(breakpoint);
-                return new AgentResult
-                {
-                    AssistantReplyText = $"Breakpoint added at line {line}",
-                    BreakpointAdded = breakpoint
-                };
-            }
-            else
-            {
-                return new AgentResult
-                {
-                    AssistantReplyText = "Error: Invalid line number. Line must be a positive integer."
-                };
-            }
+            return HandleBreakpointCommand(userMessage, state);
         }
 
         // Command: debug
-        if (trimmed.Equals("debug", StringComparison.OrdinalIgnoreCase))
+        if (userMessage.Equals("debug", StringComparison.OrdinalIgnoreCase))
         {
-            try
-            {
-                await _debuggerService.StartAsync(state.Breakpoints, ct);
-                return new AgentResult
-                {
-                    AssistantReplyText = "LLDB session started. Use the debugger panel to interact with lldb."
-                };
-            }
-            catch (Exception ex)
-            {
-                return new AgentResult
-                {
-                    AssistantReplyText = $"Error starting LLDB: {ex.Message}"
-                };
-            }
+            return await HandleDebugCommand(state, ct);
         }
 
         // Unknown command - return help
+        return await HandleAnyCommandAsync(userMessage, state, ct);
+    }
+
+    private AgentResult HandleEchoCommand(string trimmed)
+    {
+        var content = trimmed.Substring(5); // Everything after "echo "
         return new AgentResult
         {
-            AssistantReplyText = "Supported commands:\n" +
-                                 "1. echo {text} - Echoes back the text\n" +
-                                 "2. breakpoint {line} - Adds a breakpoint at the specified line\n" +
-                                 "3. debug - Runs the debugger\n\n" +
-                                 "Examples:\n" +
-                                 "  echo hello world\n" +
-                                 "  breakpoint 42\n" +
-                                 "  debug"
+            AssistantReplyText = $"answer {content}"
         };
+    }
+
+    private AgentResult HandleBreakpointCommand(string trimmed, AppState state)
+    {
+        var lineStr = trimmed.Substring(11).Trim(); // Everything after "breakpoint "
+        if (int.TryParse(lineStr, out int line) && line > 0)
+        {
+            var breakpoint = new Breakpoint(line);
+            state.Breakpoints.Add(breakpoint);
+            return new AgentResult
+            {
+                AssistantReplyText = $"Breakpoint added at line {line}"
+            };
+        }
+        else
+        {
+            return new AgentResult
+            {
+                AssistantReplyText = "Error: Invalid line number. Line must be a positive integer."
+            };
+        }
+    }
+
+    private async Task<AgentResult> HandleDebugCommand(AppState state, CancellationToken ct)
+    {
+        try
+        {
+            await _debuggerService.StartAsync(state.Breakpoints, ct);
+            return new AgentResult
+            {
+                AssistantReplyText = "LLDB session started. Use the debugger panel to interact with lldb."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new AgentResult
+            {
+                AssistantReplyText = $"Error starting LLDB: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<AgentResult> HandleAnyCommandAsync(string userMessage, AppState state, CancellationToken ct) {
+        var messages = addMesssageToHistory(userMessage, state.Messages);
+        var tools = Tools.GetTools();
+        // Convert List<object> to List<IMessage>
+        var messageList = messages.Select(m => {
+            // Use reflection to get role and content from anonymous objects
+            var roleProp = m.GetType().GetProperty("role");
+            var contentProp = m.GetType().GetProperty("content");
+            return new Message(
+                roleProp?.GetValue(m)?.ToString() ?? "user",
+                contentProp?.GetValue(m)?.ToString() ?? ""
+            ) as IMessage;
+        }).ToList();
+        var response = await _openRouterService.CallModelAsync(messageList, tools);
+        return new AgentResult 
+        { 
+            AssistantReplyText = response.Content,
+            ToolCalls = response.ToolCalls
+        };
+    }
+
+    public List<object> InitMessages()
+    {
+        const string systemPrompt = """
+        You are a helpful assistant that can help with debugging a program.
+        Feel free to use available tools.
+        The user will provide a command and you will need to help them with it.
+        Only call the tools needed for the most recent user message
+        """;
+        return new List<object> {
+            new { role = "system", content = systemPrompt }
+        };
+    }
+
+    private List<object> addMesssageToHistory(string message, List<object> history)
+    {
+        history.Add(new { role = "user", content = message });
+        return history;
+    }
+
+    private class Message : IMessage
+    {
+        public string Role { get; }
+        public string Content { get; }
+
+        public Message(string role, string content)
+        {
+            Role = role;
+            Content = content;
+        }
     }
 }
 

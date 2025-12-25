@@ -10,7 +10,7 @@ using DebugAgentPrototype.Models;
 
 namespace DebugAgentPrototype.Services;
 
-public class DebuggerService
+public class LldbService
 {
     private Process? _lldbProcess;
     private StreamWriter? _lldbInput;

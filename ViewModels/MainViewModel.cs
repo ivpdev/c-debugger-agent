@@ -16,7 +16,7 @@ public class MainViewModel : ReactiveObject
 {
     private readonly AgentService _agentService;
     private readonly AppState _appState;
-    private readonly DebuggerService _debuggerService;
+    private readonly LldbService _debuggerService;
     private string _userInput = string.Empty;
     private string _lldbInput = string.Empty;
     private string _lldbOutput = string.Empty;
@@ -26,8 +26,12 @@ public class MainViewModel : ReactiveObject
     public MainViewModel()
     {
         _appState = new AppState();
-        _debuggerService = new DebuggerService();
-        _agentService = new AgentService(_debuggerService);
+        _debuggerService = new LldbService();
+        var llmService = new OpenRouterService();
+        _agentService = new AgentService(_debuggerService, llmService);
+
+        // Initialize messages and store in AppState
+        _appState.Messages = _agentService.InitMessages();
 
         Messages = new ObservableCollection<ChatMessage>();
         Breakpoints = new ObservableCollection<Breakpoint>();
@@ -148,26 +152,33 @@ public class MainViewModel : ReactiveObject
             Dispatcher.UIThread.Post(() => Messages.Add(userMessage));
 
             // Process with agent
-            var result = await _agentService.HandleAsync(userText, _appState, CancellationToken.None);
+            var result = await _agentService.ProcessUserMessageAsync(userText, _appState, CancellationToken.None);
 
             // Update UI on UI thread
             Dispatcher.UIThread.Post(() =>
             {
+                // Build agent response text
+                var responseText = result.AssistantReplyText;
+                
+                // Add tool calls information if present
+                if (result.ToolCalls != null && result.ToolCalls.Count > 0)
+                {
+                    var toolCallsInfo = new StringBuilder();
+                    toolCallsInfo.AppendLine("\n[Tool Calls]");
+                    foreach (var toolCall in result.ToolCalls)
+                    {
+                        toolCallsInfo.AppendLine($"  • {toolCall.Name}({toolCall.Arguments})");
+                    }
+                    responseText += toolCallsInfo.ToString();
+                }
+
                 // Add agent response
                 var agentMessage = new ChatMessage
                 {
                     Role = ChatMessageRole.Agent,
-                    Text = result.AssistantReplyText
+                    Text = responseText
                 };
                 Messages.Add(agentMessage);
-
-                // Handle breakpoint addition
-                if (result.BreakpointAdded != null)
-                {
-                    Breakpoints.Add(result.BreakpointAdded);
-                    // Keep AppState in sync
-                    _appState.Breakpoints.Add(result.BreakpointAdded);
-                }
 
                 // Update lldb running state
                 IsLldbRunning = _debuggerService.IsRunning;
