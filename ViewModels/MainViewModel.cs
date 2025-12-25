@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -15,17 +16,24 @@ public class MainViewModel : ReactiveObject
 {
     private readonly AgentService _agentService;
     private readonly AppState _appState;
+    private readonly DebuggerService _debuggerService;
     private string _userInput = string.Empty;
+    private string _lldbInput = string.Empty;
+    private string _lldbOutput = string.Empty;
     private bool _isBusy;
+    private bool _isLldbRunning;
 
     public MainViewModel()
     {
         _appState = new AppState();
-        _agentService = new AgentService(new DebuggerService());
+        _debuggerService = new DebuggerService();
+        _agentService = new AgentService(_debuggerService);
 
         Messages = new ObservableCollection<ChatMessage>();
-        CallStack = new ObservableCollection<StackFrame>();
         Breakpoints = new ObservableCollection<Breakpoint>();
+
+        // Subscribe to lldb output
+        _debuggerService.OutputReceived += OnLldbOutputReceived;
 
         // SendMessageCommand is enabled when not busy and user input is not empty
         var canSend = this.WhenAnyValue(
@@ -36,11 +44,32 @@ public class MainViewModel : ReactiveObject
         SendMessageCommand = ReactiveCommand.CreateFromTask(
             SendMessageAsync,
             canSend);
+
+        // SendLldbCommand is enabled when lldb is running and input is not empty
+        var canSendLldb = this.WhenAnyValue(
+            x => x.IsLldbRunning,
+            x => x.LldbInput,
+            (running, input) => running && !string.IsNullOrWhiteSpace(input));
+
+        SendLldbCommand = ReactiveCommand.CreateFromTask(
+            SendLldbCommandAsync,
+            canSendLldb);
     }
 
     public ObservableCollection<ChatMessage> Messages { get; }
-    public ObservableCollection<StackFrame> CallStack { get; }
     public ObservableCollection<Breakpoint> Breakpoints { get; }
+
+    public string LldbOutput
+    {
+        get => _lldbOutput;
+        set => this.RaiseAndSetIfChanged(ref _lldbOutput, value);
+    }
+
+    public string LldbInput
+    {
+        get => _lldbInput;
+        set => this.RaiseAndSetIfChanged(ref _lldbInput, value);
+    }
 
     public string UserInput
     {
@@ -54,7 +83,49 @@ public class MainViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isBusy, value);
     }
 
+    public bool IsLldbRunning
+    {
+        get => _isLldbRunning;
+        set => this.RaiseAndSetIfChanged(ref _isLldbRunning, value);
+    }
+
     public ReactiveCommand<Unit, Unit> SendMessageCommand { get; }
+    public ReactiveCommand<Unit, Unit> SendLldbCommand { get; }
+
+    private void OnLldbOutputReceived(object? sender, string output)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            LldbOutput += output + "\n";
+        });
+    }
+
+    private async Task SendLldbCommandAsync()
+    {
+        if (string.IsNullOrWhiteSpace(LldbInput) || !_debuggerService.IsRunning)
+            return;
+
+        var command = LldbInput.Trim();
+        LldbInput = string.Empty; // Clear input immediately
+
+        try
+        {
+            await _debuggerService.SendCommandAsync(command, CancellationToken.None);
+            // Update running state in case it changed
+            Dispatcher.UIThread.Post(() =>
+            {
+                IsLldbRunning = _debuggerService.IsRunning;
+            });
+        }
+        catch (Exception ex)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                LldbOutput += $"Error: {ex.Message}\n";
+                IsLldbRunning = _debuggerService.IsRunning;
+            });
+        }
+    }
 
     private async Task SendMessageAsync()
     {
@@ -98,15 +169,8 @@ public class MainViewModel : ReactiveObject
                     _appState.Breakpoints.Add(result.BreakpointAdded);
                 }
 
-                // Handle call stack update
-                if (result.CallStack != null)
-                {
-                    CallStack.Clear();
-                    foreach (var frame in result.CallStack)
-                    {
-                        CallStack.Add(frame);
-                    }
-                }
+                // Update lldb running state
+                IsLldbRunning = _debuggerService.IsRunning;
             });
         }
         finally

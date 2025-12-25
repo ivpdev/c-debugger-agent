@@ -57,12 +57,21 @@ public class AgentService
         // Command: debug
         if (trimmed.Equals("debug", StringComparison.OrdinalIgnoreCase))
         {
-            var debugOutput = await _debuggerService.RunAsync(state.Breakpoints, ct);
-            return new AgentResult
+            try
             {
-                AssistantReplyText = debugOutput.ConsoleOutput,
-                CallStack = debugOutput.CallStack
-            };
+                await _debuggerService.StartAsync(state.Breakpoints, ct);
+                return new AgentResult
+                {
+                    AssistantReplyText = "LLDB session started. Use the debugger panel to interact with lldb."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new AgentResult
+                {
+                    AssistantReplyText = $"Error starting LLDB: {ex.Message}"
+                };
+            }
         }
 
         // Unknown command - return help

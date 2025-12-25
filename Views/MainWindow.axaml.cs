@@ -22,5 +22,14 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
     }
+
+    private void OnLldbInputKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DataContext is MainViewModel vm)
+        {
+            vm.SendLldbCommand.Execute(Unit.Default);
+            e.Handled = true;
+        }
+    }
 }
 
