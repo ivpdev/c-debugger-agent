@@ -108,6 +108,11 @@ public class AgentService
             ) as IMessage;
         }).ToList();
         var response = await _openRouterService.CallModelAsync(messageList, tools);
+        if (response.ToolCalls.Count > 0) {
+            foreach (var toolCall in response.ToolCalls) {
+                var toolResult = await Tools.callTool(toolCall.Name, toolCall.Arguments, state, _debuggerService, ct);
+            }
+        }
         return new AgentResult 
         { 
             AssistantReplyText = response.Content,

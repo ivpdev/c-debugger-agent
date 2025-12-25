@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using DebugAgentPrototype.Models;
 
@@ -27,19 +28,60 @@ public class Tools
         };
     }
 
-    public static Task<string> callTool(string toolName, string parameters)
+    public static async Task<string> callTool(string toolName, string parameters, AppState state, LldbService lldbService, CancellationToken ct)
     {
         switch (toolName)
         {
-            case "run":
-                // TODO: Implement run program tool 
-                return Task.FromResult("Program run");
+            case "run": 
+                await lldbService.StartAsync(state.Breakpoints, ct);
+
+                return "Program run";
             case "breakpoint":
-                // TODO: Implement breakpoint tool
-                return Task.FromResult("Breakpoint set");
+                // Parse JSON parameters to extract line number
+                if (string.IsNullOrWhiteSpace(parameters))
+                {
+                    throw new ArgumentException("Parameters cannot be empty for breakpoint tool");
+                }
+
+                JsonDocument? jsonDoc = null;
+                try
+                {
+                    jsonDoc = JsonDocument.Parse(parameters);
+                    var root = jsonDoc.RootElement;
+
+                    if (!root.TryGetProperty("line", out var lineElement))
+                    {
+                        throw new ArgumentException("Missing required 'line' parameter");
+                    }
+
+                    if (!lineElement.TryGetInt32(out int line) || line <= 0)
+                    {
+                        throw new ArgumentException("'line' must be a positive integer");
+                    }
+
+                    // Add breakpoint to state
+                    var breakpoint = new Breakpoint(line);
+                    state.Breakpoints.Add(breakpoint);
+
+                    // If LLDB is running, set the breakpoint
+                    if (lldbService.IsRunning)
+                    {
+                        await lldbService.SendCommandAsync($"breakpoint set --file game.c --line {line}", ct);
+                    }
+
+                    return $"Breakpoint set at line {line}";
+                }
+                catch (JsonException ex)
+                {
+                    throw new ArgumentException($"Invalid JSON parameters: {ex.Message}", ex);
+                }
+                finally
+                {
+                    jsonDoc?.Dispose();
+                }
             case "continue":
                 // TODO: Implement continue execution tool
-                return Task.FromResult("Execution continued");
+                return "Execution continued";
             default:
                 throw new Exception($"Tool {toolName} not found");
         }
