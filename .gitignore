@@ -50,6 +50,7 @@ artifacts/
 
 ## Mac
 .DS_Store
+.env
 
 ## Temporary files
 *.tmp

@@ -12,6 +12,7 @@ public class ChatMessage
 public enum ChatMessageRole
 {
     User,
-    Agent
+    Agent,
+    System,
 }
 

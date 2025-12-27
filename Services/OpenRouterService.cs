@@ -25,10 +25,11 @@ public class OpenRouterService
         }
         _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/your-repo");
         _httpClient.DefaultRequestHeaders.Add("X-Title", "Debug Agent Prototype");
+        Console.WriteLine($"API Key loaded: {_apiKey}");
     }
 
     
-    public async Task<ILlmResponse> CallModelAsync(List<IMessage> messages, List<IToolConfig>? tools = null)
+    public async Task<ILlmResponse> CallModelAsync(List<ChatMessage> messages, List<IToolConfig>? tools = null)
     {
         Console.WriteLine("!Calling OpenRouter API with messages: " + messages.Count + " and tools: " + (tools?.Count ?? 0));
 
@@ -105,11 +106,17 @@ public class OpenRouterService
         };
     }
 
-    private object toOpenRouterMessage(IMessage message) {
-        return new {
-            role = message.Role,
-            content = message.Content
+    private OpenRouterMessage toOpenRouterMessage(ChatMessage message) {
+        return new OpenRouterMessage {
+            Role = message.Role.ToString().ToLowerInvariant(),
+            Content = message.Text
         };
+    }
+
+    private class OpenRouterMessage
+    {
+        public string Role { get; set; }
+        public string Content { get; set; }
     }
 
     private ILlmResponse ParseOpenRouterResponse(string jsonResponse)

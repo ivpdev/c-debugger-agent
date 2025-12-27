@@ -14,13 +14,21 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        LoadEnvironmentFile();
+        
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    private static void LoadEnvironmentFile()
+    {
         // Load .env file - try multiple locations
+        // Check solution root FIRST (most common location)
         var possiblePaths = new[]
         {
+            // Solution root (5 levels up) - check this FIRST
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".env")),
             // Project root (4 levels up from bin/Debug/net9.0/)
             Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".env")),
-            // Solution root (5 levels up)
-            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".env")),
             // Current working directory
             Path.Combine(Directory.GetCurrentDirectory(), ".env"),
             // Executable directory
@@ -51,8 +59,6 @@ class Program
                 // Ignore if .env not found
             }
         }
-        
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

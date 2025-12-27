@@ -78,10 +78,9 @@ public class LldbService
         _lldbProcess.BeginErrorReadLine();
         _isRunning = true;
 
-        // Set breakpoints if any
         if (breakpoints.Count > 0)
         {
-            await Task.Delay(500, ct); // Give lldb time to initialize
+            await Task.Delay(500, ct);
             foreach (var bp in breakpoints)
             {
                 await SendCommandAsync($"breakpoint set --file game.c --line {bp.Line}", ct);

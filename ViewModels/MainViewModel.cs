@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Reactive;
-using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,28 +15,29 @@ public class MainViewModel : ReactiveObject
 {
     private readonly AgentService _agentService;
     private readonly AppState _appState;
-    private readonly LldbService _debuggerService;
+    private readonly LldbService _lldbService;
+    private readonly OpenRouterService _openRouterService;
     private string _userInput = string.Empty;
     private string _lldbInput = string.Empty;
     private string _lldbOutput = string.Empty;
     private bool _isBusy;
     private bool _isLldbRunning;
 
+    public ObservableCollection<ChatMessage> Messages { get; }
+
     public MainViewModel()
     {
         _appState = new AppState();
-        _debuggerService = new LldbService();
-        var llmService = new OpenRouterService();
-        _agentService = new AgentService(_debuggerService, llmService);
+        _lldbService = new LldbService();
+        _openRouterService = new OpenRouterService();
+        _agentService = new AgentService(_lldbService, _openRouterService);
 
-        // Initialize messages and store in AppState
         _appState.Messages = _agentService.InitMessages();
 
         Messages = new ObservableCollection<ChatMessage>();
-        Breakpoints = new ObservableCollection<Breakpoint>();
 
         // Subscribe to lldb output
-        _debuggerService.OutputReceived += OnLldbOutputReceived;
+        _lldbService.OutputReceived += OnLldbOutputReceived;
 
         // SendMessageCommand is enabled when not busy and user input is not empty
         var canSend = this.WhenAnyValue(
@@ -59,9 +59,6 @@ public class MainViewModel : ReactiveObject
             SendLldbCommandAsync,
             canSendLldb);
     }
-
-    public ObservableCollection<ChatMessage> Messages { get; }
-    public ObservableCollection<Breakpoint> Breakpoints { get; }
 
     public string LldbOutput
     {
@@ -106,7 +103,7 @@ public class MainViewModel : ReactiveObject
 
     private async Task SendLldbCommandAsync()
     {
-        if (string.IsNullOrWhiteSpace(LldbInput) || !_debuggerService.IsRunning)
+        if (string.IsNullOrWhiteSpace(LldbInput) || !_lldbService.IsRunning)
             return;
 
         var command = LldbInput.Trim();
@@ -114,11 +111,11 @@ public class MainViewModel : ReactiveObject
 
         try
         {
-            await _debuggerService.SendCommandAsync(command, CancellationToken.None);
+            await _lldbService.SendCommandAsync(command, CancellationToken.None);
             // Update running state in case it changed
             Dispatcher.UIThread.Post(() =>
             {
-                IsLldbRunning = _debuggerService.IsRunning;
+                IsLldbRunning = _lldbService.IsRunning;
             });
         }
         catch (Exception ex)
@@ -126,7 +123,7 @@ public class MainViewModel : ReactiveObject
             Dispatcher.UIThread.Post(() =>
             {
                 LldbOutput += $"Error: {ex.Message}\n";
-                IsLldbRunning = _debuggerService.IsRunning;
+                IsLldbRunning = _lldbService.IsRunning;
             });
         }
     }
@@ -137,7 +134,7 @@ public class MainViewModel : ReactiveObject
             return;
 
         var userText = UserInput.Trim();
-        UserInput = string.Empty; // Clear input immediately
+        UserInput = string.Empty; 
         IsBusy = true;
 
         try
@@ -181,7 +178,7 @@ public class MainViewModel : ReactiveObject
                 Messages.Add(agentMessage);
 
                 // Update lldb running state
-                IsLldbRunning = _debuggerService.IsRunning;
+                IsLldbRunning = _lldbService.IsRunning;
             });
         }
         finally
