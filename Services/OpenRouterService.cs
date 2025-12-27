@@ -41,7 +41,7 @@ public class OpenRouterService
         var requestBody = new
         {
             model = "openai/gpt-4o-mini", // Default model, can be made configurable
-            messages = messages.Select(toOpenRouterMessage).ToList(),
+            messages = FlattenMessages(messages.Select(toOpenRouterMessage)),
             tools = tools?.Select(toOpenRouterTool).ToList()
         };
 
@@ -106,17 +106,71 @@ public class OpenRouterService
         };
     }
 
-    private OpenRouterMessage toOpenRouterMessage(ChatMessage message) {
-        return new OpenRouterMessage {
-            Role = message.Role.ToString().ToLowerInvariant(),
-            Content = message.Text
+    private object toOpenRouterMessage(ChatMessage message) {
+        if (message is AssistantMessage assistantMsg)
+        {
+            var result = new Dictionary<string, object>
+            {
+                ["role"] = "assistant",
+                ["content"] = assistantMsg.Text ?? ""
+            };
+            
+            if (assistantMsg.ToolCallRequests.Count > 0)
+            {
+                var toolCalls = assistantMsg.ToolCallRequests.Select(tcr => new Dictionary<string, object>
+                {
+                    ["id"] = tcr.Id,
+                    ["type"] = "function",
+                    ["function"] = new Dictionary<string, object>
+                    {
+                        ["name"] = tcr.Name,
+                        ["arguments"] = tcr.Arguments
+                    }
+                }).ToList();
+                result["tool_calls"] = toolCalls;
+            }
+            
+            return result;
+        }
+        
+        if (message is ToolCallMessage toolMsg)
+        {
+            var toolMessages = toolMsg.ToolCalls.Select(tc => new Dictionary<string, object>
+            {
+                ["role"] = "tool",
+                ["content"] = JsonSerializer.Serialize(tc.Result ?? ""),
+                ["tool_call_id"] = tc.Id
+            }).ToList();
+            
+            return toolMessages;
+        }
+        
+        return new Dictionary<string, object>
+        {
+            ["role"] = message.Role.ToString().ToLowerInvariant(),
+            ["content"] = message.Text
         };
     }
 
-    private class OpenRouterMessage
+    //TODO simplify this
+    private List<object> FlattenMessages(IEnumerable<object> messageObjects)
     {
-        public string Role { get; set; }
-        public string Content { get; set; }
+        var result = new List<object>();
+        foreach (var msg in messageObjects)
+        {
+            if (msg is System.Collections.IEnumerable enumerable && !(msg is string) && !(msg is Dictionary<string, object>))
+            {
+                foreach (var item in enumerable)
+                {
+                    result.Add(item);
+                }
+            }
+            else
+            {
+                result.Add(msg);
+            }
+        }
+        return result;
     }
 
     private ILlmResponse ParseOpenRouterResponse(string jsonResponse)
@@ -156,6 +210,10 @@ public class OpenRouterService
         {
             foreach (var toolCallElement in toolCallsElement.EnumerateArray())
             {
+                var id = toolCallElement.TryGetProperty("id", out var idElement) 
+                    ? idElement.GetString() ?? "" 
+                    : "";
+                
                 if (toolCallElement.TryGetProperty("function", out var functionElement))
                 {
                     var name = functionElement.TryGetProperty("name", out var nameElement) 
@@ -168,6 +226,7 @@ public class OpenRouterService
 
                     toolCalls.Add(new Models.ToolCall
                     {
+                        Id = id,
                         Name = name,
                         Arguments = arguments
                     });

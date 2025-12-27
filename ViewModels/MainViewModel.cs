@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Reactive;
 using System.Text;
 using System.Threading;
@@ -152,6 +153,8 @@ public class MainViewModel : ReactiveObject
             {
                 var responseText = result.AssistantReplyText;
                 
+                // Create AgentMessage if there are tool calls, otherwise regular ChatMessage
+                ChatMessage agentMessage;
                 if (result.ToolCalls != null && result.ToolCalls.Count > 0)
                 {
                     var toolCallsInfo = new StringBuilder();
@@ -161,13 +164,28 @@ public class MainViewModel : ReactiveObject
                         toolCallsInfo.AppendLine($"  • {toolCall.Name}({toolCall.Arguments})");
                     }
                     responseText += toolCallsInfo.ToString();
+                    
+                    var toolCallRequests = result.ToolCalls.Select(tc => new Services.ToolCallRequest
+                    {
+                        Name = tc.Name,
+                        Arguments = tc.Arguments
+                    }).ToList();
+                    
+                    agentMessage = new AssistantMessage
+                    {
+                        Text = responseText,
+                        ToolCallRequests = toolCallRequests
+                    };
                 }
-
-                var agentMessage = new ChatMessage
+                else
                 {
-                    Role = ChatMessageRole.Agent,
-                    Text = responseText
-                };
+                    agentMessage = new ChatMessage
+                    {
+                        Role = ChatMessageRole.Assistant,
+                        Text = responseText
+                    };
+                }
+                
                 Messages.Add(agentMessage);
 
                 IsLldbRunning = _lldbService.IsRunning;

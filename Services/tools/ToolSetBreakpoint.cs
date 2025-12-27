@@ -54,8 +54,7 @@ public static class ToolSetBreakpoint
 
             if (lldbService.IsRunning)
             {
-                //TODO hide details to lldb service
-                await lldbService.SendCommandAsync($"breakpoint set --file game.c --line {line}", ct);
+                await lldbService.SendCommandAsync($"br set --file game.c --line {line}", ct);
             }
 
             return $"Breakpoint set at line {line}";

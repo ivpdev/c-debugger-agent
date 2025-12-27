@@ -20,24 +20,46 @@ public class ToolsService
             };
     }
 
-    public static async Task<string> callTool(string toolName, string parameters, AppState state, LldbService lldbService, CancellationToken ct)
+    private static async Task<ToolCall> callTool(ToolCallRequest toolCallRequest, AppState state, LldbService lldbService, CancellationToken ct)
     {
-        switch (toolName)
+        object? result;
+        switch (toolCallRequest.Name)
         {
             case "run": 
-                return await ToolRun.CallAsync(state, lldbService, ct);
+                result = await ToolRun.CallAsync(state, lldbService, ct);
+                break;
             case "breakpoint":
-                return await ToolSetBreakpoint.CallAsync(parameters, state, lldbService, ct);
+                result = await ToolSetBreakpoint.CallAsync(toolCallRequest.Arguments, state, lldbService, ct);
+                break;
             case "get_source_code":
-                return ToolGetSourceCode.CallAsync(state, lldbService, ct);
+                result = ToolGetSourceCode.CallAsync(state, lldbService, ct);
+                break;
             case "continue":
                 // TODO: Implement continue execution tool
-                return "Execution continued";
+                result = "Execution continued";
+                break;
             default:
-                throw new Exception($"Tool {toolName} not found");
+                throw new Exception($"Tool {toolCallRequest.Name} not found");
         }
+        
+        return new ToolCall
+        {
+            Id = toolCallRequest.Id,
+            Name = toolCallRequest.Name,
+            Arguments = toolCallRequest.Arguments,
+            Result = result
+        };
     }
 
+    public static async Task<List<ToolCall>> callToolsAsync(List<ToolCallRequest> toolCallRequests, AppState state, LldbService lldbService, CancellationToken ct)
+    {
+        var toolCalls = new List<ToolCall>();
+        foreach (var toolCallRequest in toolCallRequests) {
+            var toolCall = await callTool(toolCallRequest, state, lldbService, ct);
+            toolCalls.Add(toolCall);
+        }
+        return toolCalls;
+    }
 }
 
 public class ToolConfig
@@ -54,3 +76,13 @@ public class ToolConfig
     }
 }
 
+public class ToolCallRequest {
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Arguments { get; set; } = string.Empty;
+}
+
+//FIXME smell
+public class ToolCall: ToolCallRequest {
+    public object? Result { get; set; } = null;
+}

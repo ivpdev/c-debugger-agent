@@ -8,6 +8,7 @@ public interface ILlmResponse {
 }
 
 public interface IToolCall {
+    string Id { get; }
     string Name { get; }
     string Arguments { get; }
 }
@@ -20,6 +21,7 @@ public class LlmResponse : ILlmResponse
 
 public class ToolCall : IToolCall
 {
+    public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public string Arguments { get; set; } = "";
 }

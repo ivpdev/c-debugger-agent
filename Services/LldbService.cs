@@ -74,7 +74,7 @@ public class LldbService
             await Task.Delay(500, ct);
             foreach (var bp in breakpoints)
             {
-                await SendCommandAsync($"breakpoint set --file game.c --line {bp.Line}", ct);
+                await SendCommandAsync($"br set --file game.c --line {bp.Line}", ct);
             }
         }
 
@@ -90,6 +90,7 @@ public class LldbService
             throw new InvalidOperationException("LLDB session is not running");
         }
 
+        Console.WriteLine($"[LLDB] Sending command: {command}");
         await _lldbInput.WriteLineAsync(command);
         await _lldbInput.FlushAsync();
     }
