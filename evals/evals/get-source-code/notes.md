@@ -1,0 +1,1 @@
+tests if the agent is capable of calling tools in the loop

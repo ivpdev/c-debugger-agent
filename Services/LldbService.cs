@@ -29,21 +29,12 @@ public class LldbService
             throw new InvalidOperationException("LLDB session is already running");
         }
 
-        var gamePath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "test_program", "game");
-        if (!Path.IsPathRooted(gamePath))
-        {
-            gamePath = Path.GetFullPath(gamePath);
-        }
-
-        if (!File.Exists(gamePath))
-        {
-            throw new FileNotFoundException($"Game executable not found at: {gamePath}");
-        }
+        var inspectedFilePath = SourceCodeService.GetInspectedFilePath();
 
         var startInfo = new ProcessStartInfo
         {
             FileName = "lldb",
-            Arguments = gamePath,
+            Arguments = inspectedFilePath,
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
