@@ -33,48 +33,9 @@ public class ToolsService
         switch (toolName)
         {
             case "run": 
-                await lldbService.StartAsync(state.Breakpoints, ct);
-
-                return "Program run";
+                return await callToolRunAsync(state, lldbService, ct);
             case "breakpoint":
-                if (string.IsNullOrWhiteSpace(parameters))
-                {
-                    throw new ArgumentException("Parameters cannot be empty for breakpoint tool");
-                }
-
-                JsonDocument? jsonDoc = null;
-                try
-                {
-                    jsonDoc = JsonDocument.Parse(parameters);
-                    var root = jsonDoc.RootElement;
-
-                    if (!root.TryGetProperty("line", out var lineElement))
-                    {
-                        throw new ArgumentException("Missing required 'line' parameter");
-                    }
-
-                    if (!lineElement.TryGetInt32(out int line) || line <= 0)
-                    {
-                        throw new ArgumentException("'line' must be a positive integer");
-                    }
-
-                    state.Breakpoints.Add(new Breakpoint(line));
-
-                    if (lldbService.IsRunning)
-                    {
-                        await lldbService.SendCommandAsync($"breakpoint set --file game.c --line {line}", ct);
-                    }
-
-                    return $"Breakpoint set at line {line}";
-                }
-                catch (JsonException ex)
-                {
-                    throw new ArgumentException($"Invalid JSON parameters: {ex.Message}", ex);
-                }
-                finally
-                {
-                    jsonDoc?.Dispose();
-                }
+                return await callToolBreakpointAsync(parameters, state, lldbService, ct);
             case "continue":
                 // TODO: Implement continue execution tool
                 return "Execution continued";
@@ -82,6 +43,55 @@ public class ToolsService
                 throw new Exception($"Tool {toolName} not found");
         }
     }
+
+    private static async Task<string> callToolRunAsync(AppState state, LldbService lldbService, CancellationToken ct)
+    {
+        await lldbService.StartAsync(state.Breakpoints, ct);
+        return "Program run";
+    }
+
+    private static int parseLineFromParameters(string parameters) {
+        if (string.IsNullOrWhiteSpace(parameters))
+        {
+            throw new ArgumentException("Parameters cannot be empty for breakpoint tool");
+        }
+
+        using var jsonDoc = JsonDocument.Parse(parameters);
+        var root = jsonDoc.RootElement;
+
+        if (!root.TryGetProperty("line", out var lineElement))
+        {
+            throw new ArgumentException("Missing required 'line' parameter");
+        }
+
+        if (!lineElement.TryGetInt32(out int line) || line <= 0)
+        {
+            throw new ArgumentException("'line' must be a positive integer");
+        }
+
+        return line;
+    }
+
+    private static async Task<string> callToolBreakpointAsync(string parameters, AppState state, LldbService lldbService, CancellationToken ct)
+    {
+        try
+        {
+            int line = parseLineFromParameters(parameters);
+            state.Breakpoints.Add(new Breakpoint(line));
+
+            if (lldbService.IsRunning)
+            {
+                await lldbService.SendCommandAsync($"breakpoint set --file game.c --line {line}", ct);
+            }
+
+            return $"Breakpoint set at line {line}";
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException($"Invalid JSON parameters: {ex.Message}", ex);
+        }
+    }
+    
 }
 
 public class ToolConfig
