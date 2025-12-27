@@ -26,13 +26,13 @@
                               Margin="10,0,10,10"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Auto">
-                    <TextBox Text="{Binding LldbOutput, Mode=OneWay}" 
-                             IsReadOnly="True"
-                             TextWrapping="Wrap"
-                             FontFamily="Consolas, Courier New, monospace"
-                             Background="Black"
-                             Foreground="LightGreen"
-                             BorderThickness="0"/>
+                    <Border Background="Black"
+                            BorderThickness="0">
+                        <TextBlock Text="{Binding LldbOutput, Mode=OneWay}" 
+                                   TextWrapping="Wrap"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   Foreground="LightGreen"/>
+                    </Border>
                 </ScrollViewer>
                 <Grid Grid.Row="2" Margin="10,0,10,10">
                     <Grid.ColumnDefinitions>
