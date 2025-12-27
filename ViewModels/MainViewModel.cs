@@ -16,7 +16,6 @@ public class MainViewModel : ReactiveObject
     private readonly AgentService _agentService;
     private readonly AppState _appState;
     private readonly LldbService _lldbService;
-    private readonly OpenRouterService _openRouterService;
     private string _userInput = string.Empty;
     private string _lldbInput = string.Empty;
     private string _lldbOutput = string.Empty;
@@ -29,8 +28,8 @@ public class MainViewModel : ReactiveObject
     {
         _appState = new AppState();
         _lldbService = new LldbService();
-        _openRouterService = new OpenRouterService();
-        _agentService = new AgentService(_lldbService, _openRouterService);
+        var openRouterService = new OpenRouterService();
+        _agentService = new AgentService(_lldbService, openRouterService);
 
         _appState.Messages = _agentService.InitMessages();
 
@@ -139,7 +138,6 @@ public class MainViewModel : ReactiveObject
 
         try
         {
-            // Add user message immediately
             var userMessage = new ChatMessage
             {
                 Role = ChatMessageRole.User,
@@ -148,16 +146,12 @@ public class MainViewModel : ReactiveObject
 
             Dispatcher.UIThread.Post(() => Messages.Add(userMessage));
 
-            // Process with agent
             var result = await _agentService.ProcessUserMessageAsync(userText, _appState, CancellationToken.None);
 
-            // Update UI on UI thread
             Dispatcher.UIThread.Post(() =>
             {
-                // Build agent response text
                 var responseText = result.AssistantReplyText;
                 
-                // Add tool calls information if present
                 if (result.ToolCalls != null && result.ToolCalls.Count > 0)
                 {
                     var toolCallsInfo = new StringBuilder();
@@ -169,7 +163,6 @@ public class MainViewModel : ReactiveObject
                     responseText += toolCallsInfo.ToString();
                 }
 
-                // Add agent response
                 var agentMessage = new ChatMessage
                 {
                     Role = ChatMessageRole.Agent,
@@ -177,7 +170,6 @@ public class MainViewModel : ReactiveObject
                 };
                 Messages.Add(agentMessage);
 
-                // Update lldb running state
                 IsLldbRunning = _lldbService.IsRunning;
             });
         }

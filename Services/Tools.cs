@@ -59,11 +59,8 @@ public class Tools
                         throw new ArgumentException("'line' must be a positive integer");
                     }
 
-                    // Add breakpoint to state
-                    var breakpoint = new Breakpoint(line);
-                    state.Breakpoints.Add(breakpoint);
+                    state.Breakpoints.Add(new Breakpoint(line));
 
-                    // If LLDB is running, set the breakpoint
                     if (lldbService.IsRunning)
                     {
                         await lldbService.SendCommandAsync($"breakpoint set --file game.c --line {line}", ct);
