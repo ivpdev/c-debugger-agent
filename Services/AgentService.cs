@@ -27,11 +27,11 @@ public class AgentService
 
     private async Task<AgentResult> HandleAnyCommandAsync(string userMessage, AppState state, CancellationToken ct) {
         state.Messages.Add(new ChatMessage { Role = ChatMessageRole.User, Text = userMessage });
-        var tools = Tools.GetTools();
+        var tools = ToolsService.GetTools();
         var response = await _openRouterService.CallModelAsync(state.Messages, tools);
         if (response.ToolCalls.Count > 0) {
             foreach (var toolCall in response.ToolCalls) {
-                var toolResult = await Tools.callTool(toolCall.Name, toolCall.Arguments, state, _lldbService, ct);
+                var toolResult = await ToolsService.callTool(toolCall.Name, toolCall.Arguments, state, _lldbService, ct);
             }
         }
         return new AgentResult 

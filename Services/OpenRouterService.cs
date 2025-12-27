@@ -29,7 +29,7 @@ public class OpenRouterService
     }
 
     
-    public async Task<ILlmResponse> CallModelAsync(List<ChatMessage> messages, List<IToolConfig>? tools = null)
+    public async Task<ILlmResponse> CallModelAsync(List<ChatMessage> messages, List<ToolConfig>? tools = null)
     {
         Console.WriteLine("!Calling OpenRouter API with messages: " + messages.Count + " and tools: " + (tools?.Count ?? 0));
 
@@ -95,7 +95,7 @@ public class OpenRouterService
         }
     }
 
-    private object toOpenRouterTool(IToolConfig tool) {
+    private object toOpenRouterTool(ToolConfig tool) {
         return new {
             type = "function",
             function = new {

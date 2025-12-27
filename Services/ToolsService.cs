@@ -7,11 +7,11 @@ using DebugAgentPrototype.Models;
 
 namespace DebugAgentPrototype.Services;
 
-public class Tools
+public class ToolsService
 {
-    public static List<IToolConfig> GetTools()
+    public static List<ToolConfig> GetTools()
     {
-        return new List<IToolConfig>
+        return new List<ToolConfig>
         {
             new ToolConfig("run", "Run the program", new { type = "object", properties = new { } }),
             new ToolConfig("breakpoint", "Set a breakpoint at the given line number", new { 
@@ -37,7 +37,6 @@ public class Tools
 
                 return "Program run";
             case "breakpoint":
-                // Parse JSON parameters to extract line number
                 if (string.IsNullOrWhiteSpace(parameters))
                 {
                     throw new ArgumentException("Parameters cannot be empty for breakpoint tool");
@@ -83,18 +82,18 @@ public class Tools
                 throw new Exception($"Tool {toolName} not found");
         }
     }
+}
 
-    private class ToolConfig : IToolConfig
+public class ToolConfig
+{
+    public string Name { get; }
+    public string? Description { get; }
+    public object Parameters { get; }
+
+    public ToolConfig(string name, string description, object parameters)
     {
-        public string Name { get; }
-        public string? Description { get; }
-        public object Parameters { get; }
-
-        public ToolConfig(string name, string description, object parameters)
-        {
-            Name = name;
-            Description = description;
-            Parameters = parameters;
-        }
+        Name = name;
+        Description = description;
+        Parameters = parameters;
     }
 }
